@@ -14,4 +14,16 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 //region routes
-Route::apiResource('regions', RegionController::class);
+// هذه المجموعة محمية بتسجيل الدخول (Sanctum)
+Route::middleware('auth:sanctum')->group(function () {
+
+    // مسار عرض المناطق متاح لكل المستخدمين المسجلين (لأن التاجر يحتاج يرى المناطق عند تقديم طلب)
+    Route::get('/regions', [RegionController::class, 'index']);
+
+    // --- مجموعة المسارات الخاصة بالأدمن فقط ---
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/regions', [RegionController::class, 'store']);
+        Route::put('/regions/{id}', [RegionController::class, 'update']);
+        Route::delete('/regions/{id}', [RegionController::class, 'destroy']);
+    });
+});

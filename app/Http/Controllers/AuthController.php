@@ -33,35 +33,39 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+
+        // 2. استخراج البيانات النظيفة والموثقة فقط (تجاهل أي شيء آخر يرسله Burp Suite)
+        $validated = $validator->validated();
+
         try {
             DB::beginTransaction(); // بدء معاملة قاعدة البيانات
 
             // 2. إنشاء المستخدم
             $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-                'phone' => $request->phone,
-                'role' => $request->role,
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'phone' => $validated['phone'],
+                'role' => $validated['role'],
             ]);
 
             // 3. إعطاء الصلاحية (Spatie)
-            $user->assignRole($request->role);
+            $user->assignRole($validated['role']);
 
             // 4. إنشاء الملف الشخصي حسب النوع (بالطريقة الصحيحة عبر العلاقات)
-            if ($request->role === 'merchant') {
+            if ($validated['role'] === 'merchant') {
                 $user->merchantProfile()->create([
-                    'store_name' => $request->store_name,
-                    'store_address' => $request->store_address ?? null,
-                    'gps_link' => $request->gps_link ?? null,
+                    'store_name' => $validated['store_name'],
+                    'store_address' => $validated['store_address'] ?? null,
+                    'gps_link' => $validated['gps_link'] ?? null,
                 ]);
-            } elseif ($request->role === 'driver') {
+            } elseif ($validated['role'] === 'driver') {
                 $user->driverProfile()->create([
-                    'vehicle_type' => $request->vehicle_type,
-                    'plate_number' => $request->plate_number,
+                    'vehicle_type' => $validated['vehicle_type'],
+                    'plate_number' => $validated['plate_number'],
                     'wallet_balance' => 0, // رصيد افتراضي
-                    'current_lat' => $request->current_lat ?? null,
-                    'current_lng' => $request->current_lng ?? null,
+                    'current_lat' => $validated['current_lat'] ?? null,
+                    'current_lng' => $validated['current_lng'] ?? null,
 
                 ]);
             }
@@ -83,7 +87,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'error' => 'Registration failed',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }

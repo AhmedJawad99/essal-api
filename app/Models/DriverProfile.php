@@ -9,7 +9,7 @@ class DriverProfile extends Model
     protected $fillable = [
         'vehicle_type',
         'plate_number',
-        'wallet_balance',
+
         'current_lat',
         'current_lng',
     ];
