@@ -17,11 +17,16 @@ class AdminRole extends Seeder
         $role = Role::firstOrCreate(['name' => 'admin']);
         $admin = User::firstOrCreate(['email' => 'admin@example.com'], [
             'name' => 'Admin',
-            'password' => Hash::make('123456789'), // تأكد من تغيير كلمة المرور بعد الإنشاء
+            'password' => Hash::make('123456789'),
             'role' => 'admin',
             'phone' => '0000000000',
 
         ]);
         $admin->assignRole($role);
+        $admin->adminProfile()->firstOrCreate([], [
+            'user_id' => $admin->id,
+            'job_title' => 'Admin',
+            'is_super_admin' => true,
+        ]);
     }
 }

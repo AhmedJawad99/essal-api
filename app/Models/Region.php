@@ -20,4 +20,9 @@ class Region extends Model
     {
         return $this->hasMany(DriverProfile::class);
     }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 }

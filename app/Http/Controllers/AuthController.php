@@ -21,10 +21,12 @@ class AuthController extends Controller
             'phone' => 'required|string|max:20',
             'role' => 'required|in:merchant,driver',
 
-            // بيانات اختيارية إذا كان تاجراً
+            // بيانات التاجر
             'store_name' => 'required_if:role,merchant|string|max:255',
+            'store_address' => 'required_if:role,merchant|string|max:255',
+            'gps_link' => 'nullable|string|max:255',
 
-            // بيانات اختيارية إذا كان مندوباً
+            // بيانات المندوب
             'vehicle_type' => 'required_if:role,driver|string|max:255',
             'plate_number' => 'required_if:role,driver|string|max:255',
         ]);

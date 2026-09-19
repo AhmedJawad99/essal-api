@@ -64,4 +64,15 @@ class User extends Authenticatable
     {
         return $this->hasOne(AdminProfile::class);
     }
+
+    // relationships of orders
+    public function merchantOrders()
+    {
+        return $this->hasMany(Order::class, 'merchant_id');
+    }
+
+    public function driverOrders()
+    {
+        return $this->hasMany(Order::class, 'driver_id');
+    }
 }

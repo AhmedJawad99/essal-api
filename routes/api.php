@@ -27,3 +27,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/regions/{id}', [RegionController::class, 'destroy']);
     });
 });
+
+//order routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/orders', [\App\Http\Controllers\OrderController::class, 'store']);
+    Route::get('/orders', [\App\Http\Controllers\OrderController::class, 'index']);
+});
