@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ShowOrdersResource;
 use App\Models\Region;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +15,18 @@ class OrderController extends Controller
     public function index()
     {
         // --- IGNORE ---
+    }
+
+
+    public function showByTrackingCode(Request $request)
+    {
+        $request->FindOrderByTrackingCode();
+    }
+
+    public function showOrders(Request $request)
+    {
+        $orders = $request->user()->merchantOrders()->with('region')->get();
+        return ShowOrdersResource::collection($orders);
     }
 
     public function store(Request $request)
@@ -38,7 +51,7 @@ class OrderController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $region = Region::findOrFail($request->region_id)->first();
+        $region = Region::findOrFail($request->region_id);
         $delevery_cost = $region->default_delivery_cost;
 
         $trackingCode = 'ORD-' . strtoupper(Str::random(10));
@@ -65,9 +78,8 @@ class OrderController extends Controller
             ]);
 
             $logs = $order->orderStatusLogs()->create([
-                'changed_by_id' => $region->manager_id,
+                'changed_by_id' => Auth::id(),
                 'status' => 'pending',
-                'changed_by' => Auth::id(),
             ]);
 
             DB::commit();
