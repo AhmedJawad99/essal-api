@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('job_title')->nullable();
+            $table->foreignId('region_id')->nullable()->constrained('regions')->onDelete('set null');
             $table->boolean('is_super_admin')->default(false);
             $table->timestamps();
         });

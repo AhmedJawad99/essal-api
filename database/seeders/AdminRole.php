@@ -26,6 +26,7 @@ class AdminRole extends Seeder
         $admin->adminProfile()->firstOrCreate([], [
             'user_id' => $admin->id,
             'job_title' => 'Admin',
+            'region_id' => 19,
             'is_super_admin' => true,
         ]);
     }

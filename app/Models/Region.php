@@ -25,4 +25,9 @@ class Region extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    public function orderBatches()
+    {
+        return $this->hasMany(OrderBatch::class);
+    }
 }

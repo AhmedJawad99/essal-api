@@ -24,6 +24,8 @@ class UserResource extends JsonResource
 
             // جلب بيانات المدير إذا كان المستخدم مديراً وتم تحميل العلاقة
             'admin_profile' => $this->whenLoaded('adminProfile'),
+
+            'manager_profile' => $this->whenLoaded('managerProfile')
         ];
     }
 }

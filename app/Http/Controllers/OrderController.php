@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ShowOrdersResource;
+use App\Models\Order;
 use App\Models\Region;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,15 +19,78 @@ class OrderController extends Controller
     }
 
 
-    public function showByTrackingCode(Request $request)
+    public function showByTrackingCode($trackingCode, Request $request)
     {
-        $request->FindOrderByTrackingCode();
+
+
+        $user = $request->user();
+        //merchant
+        if ($user->hasRole('merchant') || $user->role === 'merchant') {
+            $order = $user->merchantOrders()->where('tracking_code', $trackingCode)->with('region')->first();
+            return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+        }
+        //driver
+        elseif ($user->hasRole('driver') || $user->role === 'driver') {
+            $order = $user->driverOrders()->where('tracking_code', $trackingCode)->with('region')->first();
+            return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+        }
+        //admin
+        elseif ($user->hasRole('admin') || $user->role === 'admin') {
+            //super admin
+            if ($user->adminProfile && $user->adminProfile->is_super_admin) {
+                $order = Order::where('tracking_code', $trackingCode)->with(['region', 'merchant', 'driver'])->first();
+                return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+            }
+            //manager admin
+            elseif ($user->adminProfile && $user->adminProfile->region_id) {
+                $order = Order::where('tracking_code', $trackingCode)
+                    ->where('region_id', $user->adminProfile->region_id)
+                    ->with(['region', 'merchant', 'driver'])
+                    ->first();
+                return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+            } else {
+                return response()->json(["message" => ""], 403);
+            }
+        } else {
+            return response()->json([
+                "message" => "You are not authorized to view this order"
+            ], 403);
+        }
     }
 
     public function showOrders(Request $request)
     {
-        $orders = $request->user()->merchantOrders()->with('region')->get();
-        return ShowOrdersResource::collection($orders);
+        $user = $request->user();
+
+        if ($user->hasRole('merchant') || $user->role === 'merchant') {
+            $orders = $user->merchantOrders()->with('region')->orderBy('created_at', 'desc')->paginate(20);
+            return ShowOrdersResource::collection($orders);
+        } elseif ($user->hasRole('driver') || $user->role === 'driver') {
+            $orders = $user->driverOrders()->with('region')->orderBy('created_at', 'desc')->paginate(20);
+            return ShowOrdersResource::collection($orders);
+        } elseif ($user->hasRole('admin') || $user->role === 'admin') {
+
+            if ($user->adminProfile && $user->adminProfile->is_super_admin) {
+                $orders = Order::with(['region', 'merchant', 'driver'])->orderBy('created_at', 'desc')->paginate(20);
+                return ShowOrdersResource::collection($orders);
+            }
+
+            if ($user->adminProfile && $user->adminProfile->region_id) {
+                $orders = Order::where('region_id', $user->adminProfile->region_id)
+                    ->with('region')
+                    ->orderBy('created_at', 'desc')
+                    ->paginate(20);
+                return ShowOrdersResource::collection($orders);
+            }
+
+
+
+            return response()->json(["message" => "حساب الإدارة هذا غير مكتمل الإعدادات"], 403);
+        }
+
+        return response()->json([
+            "message" => "You are not authorized to view orders"
+        ], 403);
     }
 
     public function store(Request $request)

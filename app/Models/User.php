@@ -75,4 +75,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class, 'driver_id');
     }
+
+    public function orderBatches()
+    {
+        return $this->hasMany(OrderBatch::class, 'driver_id');
+    }
 }

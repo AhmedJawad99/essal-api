@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('driver_id')->nullable()->constrained('users')->onDelete('set null');
             $table->foreignId('manager_id')->nullable()->constrained('users')->onDelete('set null');
             $table->foreignId('region_id')->constrained('regions')->onDelete('restrict');
-
+            $table->foreignId('batch_id')->nullable()->constrained('order_batches')->nullOnDelete();
             // بيانات الطلب الأساسية
             $table->string('tracking_code')->unique();
             $table->string('customer_name');

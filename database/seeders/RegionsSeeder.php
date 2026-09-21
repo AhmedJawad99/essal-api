@@ -32,11 +32,7 @@ class RegionsSeeder extends Seeder
             ['name' => 'المثنى', 'default_delivery_cost' => 5000],
             ['name' => 'الديوانية', 'default_delivery_cost' => 5000],
             ['name' => 'حلبجة', 'default_delivery_cost' => 5000],
-
-            // تفاصيل محافظة ذي قار
-            ['name' => 'ذي قار - الناصرية صوب الجزيرة', 'default_delivery_cost' => 2000],
-            ['name' => 'ذي قار - الناصرية صوب الشامية', 'default_delivery_cost' => 3000],
-            ['name' => 'ذي قار - الأقضية', 'default_delivery_cost' => 4000],
+            ['name' => 'ذي قار', 'default_delivery_cost' => 3000],
         ];
 
         foreach ($regions as $region) {

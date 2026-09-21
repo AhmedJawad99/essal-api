@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+
+    use HasFactory;
     protected $fillable = [
         'region_id',
+        'batch_id',
+
         'tracking_code',
         'customer_name',
         'customer_phone',
@@ -49,5 +54,10 @@ class Order extends Model
     public function orderStatusLogs()
     {
         return $this->hasMany(OrderStatusLog::class);
+    }
+
+    public function orderBatches()
+    {
+        return $this->belongsTo(OrderBatch::class, 'batch_id');
     }
 }
