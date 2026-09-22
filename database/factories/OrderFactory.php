@@ -25,7 +25,7 @@ class OrderFactory extends Factory
             'customer_phone' => $this->faker->phoneNumber(),
             'customer_phone_alt' => $this->faker->optional()->phoneNumber(),
             'order_description' => $this->faker->sentence(),
-            'type' => $this->faker->randomElement(['standard', 'express']),
+            'type' => $this->faker->randomElement(['pickup', 'delivery']),
             'status' => $this->faker->randomElement(['pending', 'in_progress', 'completed', 'cancelled']),
             'payment_method' => $this->faker->randomElement(['cash', 'card', 'online']),
             'is_customer_paid' => $this->faker->boolean(),

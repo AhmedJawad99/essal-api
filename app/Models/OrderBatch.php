@@ -9,7 +9,7 @@ class OrderBatch extends Model
     protected $fillable = [
         'region_id',
         'driver_id',
-        'merchant_id',
+        'order_ids',
         'batch_code',
         'status',
     ];

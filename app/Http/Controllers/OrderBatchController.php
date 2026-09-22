@@ -2,6 +2,248 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
+use App\Models\OrderBatch;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
+class OrderBatchController extends Controller
+{
+    public function store(Request $request, $batchCode)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('admin') && $user->role !== 'admin') {
+            return response()->json([
+                'message' => 'You are not authorized to create an order batch',
+            ], 403);
+        }
+        $validator = Validator::make($request->all(), [
+            'order_ids' => 'required|array|min:1',
+            'order_ids.*' => [
+                'required',
+                'exists:orders,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $order = Order::find($value);
+                    if ($order->region_id != $request->user()->adminProfile->region_id) {
+                        $fail("The order with ID {$value} does not belong to the specified region.");
+                    }
+                    if ($order->batch_id !== null) {
+                        $fail("The order with ID {$value} is already assigned to a batch.");
+                    }
+                    if ($order->status !== 'pending') {
+                        $fail("The order with ID {$value} is not in a pending status.");
+                    }
+                },
+            ],
+        ]);
 
-class OrderBatchController extends Controller {}
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+            // If batchCode is not provided, generate a new one
+            if ($batchCode == null || $batchCode == '') {
+                $batchCode = 'BATCH-'.strtoupper(Str::random(8));
+                $orderBatch = OrderBatch::create([
+                    'region_id' => $request->user()->adminProfile->region_id,
+                    'batch_code' => $batchCode,
+                    'status' => 'open',
+                ]);
+            }
+            // If batchCode is provided, check if it exists or not
+            if ($batchCode) {
+                $orderBatch = OrderBatch::where('batch_code', $batchCode)->first();
+                if (! $orderBatch) {
+                    return response()->json([
+                        'message' => 'Order batch not found',
+                    ], 404);
+                }
+            }
+
+            if ($orderBatch->status !== 'open') {
+                return response()->json([
+                    'message' => 'Cannot add orders to a batch that is not open',
+                ], 400);
+            }
+
+            if ($orderBatch->region_id != $request->user()->adminProfile->region_id) {
+                return response()->json([
+                    'message' => 'Cannot add orders to a batch that belongs to a different region',
+                ], 400);
+            }
+
+            Order::whereIn('id', $request->order_ids)->update(['batch_id' => $orderBatch->id]);
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Order batch created successfully',
+                'batch_code' => $batchCode,
+                'total_orders' => count($request->order_ids),
+                'batch' => $orderBatch->load('orders'),
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to create order batch',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function showBatchCode(Request $request, $batchCode)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('admin') && ! $user->hasRole('driver')) {
+            return response()->json([
+                'message' => 'You are not authorized to view order batches',
+            ], 403);
+        }
+
+        $orderBatch = OrderBatch::where('batch_code', $batchCode)->with('orders')->first();
+
+        if (! $orderBatch) {
+            return response()->json([
+                'message' => 'Order batch not found',
+            ], 404);
+        }
+
+        $orders = $orderBatch->orders()->get();
+
+        return response()->json([
+            'batch_code' => $orderBatch->batch_code,
+            'status' => $orderBatch->status,
+            'region_id' => $orderBatch->region_id,
+            'driver_id' => $orderBatch->driver_id,
+            'orders' => $orders,
+        ]);
+    }
+
+    public function removeOrdersFromBatch(Request $request, $batchCode)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('admin')) {
+            return response()->json([
+                'message' => 'You are not authorized to remove orders from a batch',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'order_ids' => 'required|array|min:1',
+            'order_ids.*' => [
+                'required',
+                'exists:orders,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $order = Order::find($value);
+                    if ($order->region_id != $request->user()->adminProfile->region_id) {
+                        $fail("The order with ID {$value} does not belong to the specified region.");
+                    }
+                    if ($order->batch_id === null) {
+                        $fail("The order with ID {$value} is not assigned to any batch.");
+                    }
+                    if ($order->status !== 'pending') {
+                        $fail("The order with ID {$value} is not in a pending status.");
+                    }
+                },
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $orderBatch = OrderBatch::where('batch_code', $batchCode)->first();
+        if (! $orderBatch) {
+            return response()->json([
+                'message' => 'Order batch not found',
+            ], 404);
+        }
+
+        if ($orderBatch->region_id != $request->user()->adminProfile->region_id) {
+            return response()->json([
+                'message' => 'Cannot remove orders from a batch that belongs to a different region',
+            ], 400);
+        }
+
+        if ($orderBatch->status !== 'open') {
+            return response()->json([
+                'message' => 'Cannot remove orders from a batch that is not open',
+            ], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+            Order::whereIn('id', $request->order_ids)->update(['batch_id' => null]);
+            DB::commit();
+
+            $orderBatch->load('orders');
+
+            return response()->json([
+                'message' => 'Orders removed from batch successfully',
+                'batch_code' => $batchCode,
+                'total_orders' => $orderBatch->orders()->count(),
+                'batch' => $orderBatch,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to remove orders from batch',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function removeBatch(Request $request, $batchCode)
+    {
+        $orderBatch = OrderBatch::where('batch_code', $batchCode)->first();
+        if (! $orderBatch) {
+            return response()->json([
+                'message' => 'Order batch not found',
+            ], 404);
+        }
+
+        // check if the batch is open
+        if ($orderBatch->status !== 'open') {
+            return response()->json([
+                'message' => 'Cannot remove a batch that is not open',
+            ], 400);
+        }
+
+        // check if the batch belongs to the authenticated admin
+        if ($orderBatch->region_id != $request->user()->adminProfile->region_id) {
+            return response()->json([
+                'message' => 'Cannot remove a batch that belongs to a different region',
+            ], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+            Order::where('batch_id', $orderBatch->id)->update(['batch_id' => null]);
+            $orderBatch->delete();
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Order batch removed successfully',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to remove order batch',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+    }
+}

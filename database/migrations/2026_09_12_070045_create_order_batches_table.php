@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('region_id')->constrained('regions')->onDelete('cascade');
             $table->foreignId('driver_id')->nullable()->constrained('users')->onDelete('set null');
-            $table->foreignId('merchant_id')->nullable()->constrained('users')->onDelete('set null');
             $table->string('batch_code')->unique(); //للسلة
             $table->enum('status', ['open', 'assigned', 'picked_up', 'completed'])->default('open');
             $table->timestamps();

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\OrderBatchController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\RegionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -9,11 +11,11 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-//Auth routes
+// Auth routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-//region routes
+// region routes
 // هذه المجموعة محمية بتسجيل الدخول (Sanctum)
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -28,9 +30,21 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
-//order routes
+// order routes
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/orders', [\App\Http\Controllers\OrderController::class, 'store']);
-    Route::get('/orders', [\App\Http\Controllers\OrderController::class, 'showOrders']);
-    Route::get('/orders/{trackingCode}', [\App\Http\Controllers\OrderController::class, 'showByTrackingCode']);
+    Route::post('/orders', [OrderController::class, 'store']);
+    Route::get('/orders', [OrderController::class, 'showOrders']);
+    Route::get('/orders/{trackingCode}', [OrderController::class, 'showByTrackingCode']);
+});
+
+// order batch routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/order-batches/{batchCode}', [OrderBatchController::class, 'store']);
+        Route::put('/order-batches/{batchCode}/remove', [OrderBatchController::class, 'removeOrdersFromBatch']);
+        Route::delete('/order-batches/{batchCode}', [OrderBatchController::class, 'removeBatch']);
+    });
+    Route::middleware('role:admin|driver')->group(function () {
+        Route::get('/order-batches/{batchCode}', [OrderBatchController::class, 'showBatchCode']);
+    });
 });
