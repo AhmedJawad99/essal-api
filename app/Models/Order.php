@@ -7,12 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-
     use HasFactory;
+
     protected $fillable = [
         'region_id',
         'batch_id',
-
+        'batch_code',
         'tracking_code',
         'customer_name',
         'customer_phone',
@@ -27,10 +27,10 @@ class Order extends Model
         'delivery_address',
         'delivery_gps_link',
         'delivery_cost',
-        'total_amount'
+        'total_amount',
     ];
 
-    //relationships
+    // relationships
 
     public function merchant()
     {
@@ -51,6 +51,7 @@ class Order extends Model
     {
         return $this->belongsTo(Region::class);
     }
+
     public function orderStatusLogs()
     {
         return $this->hasMany(OrderStatusLog::class);

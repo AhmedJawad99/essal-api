@@ -356,4 +356,177 @@ class OrderBatchController extends Controller
             ], 500);
         }
     }
+
+    public function pickingUpOrders(Request $request, $batchCode)
+    {
+        $user = $request->user();
+
+        if (! $user->hasRole('driver') && $user->role !== 'driver') {
+            return response()->json([
+                'message' => 'You are not authorized to pick up orders from a batch',
+            ], 403);
+        }
+
+        // 1. جلب الدفعة أولاً لتسهيل المقارنة والتحقق
+        $orderBatch = OrderBatch::where('batch_code', $batchCode)->first();
+        $ordersCount = Order::where('batch_id', $orderBatch->id)->get()->count();
+        if (! $orderBatch) {
+            return response()->json([
+                'message' => 'Order batch not found',
+            ], 404);
+        }
+
+        if ($orderBatch->status === 'picked_up') {
+            return response()->json([
+                'message' => 'Order batch is already picked up',
+                'batch_code' => $orderBatch->batch_code,
+                'driver_id' => $orderBatch->driver_id,
+            ], 400);
+        }
+
+        if ($orderBatch->status !== 'assigned') {
+            return response()->json([
+                'message' => 'Cannot pick up orders from a batch that is not assigned',
+            ], 400);
+        }
+
+        if ($orderBatch->driver_id !== $user->id) {
+            return response()->json([
+                'message' => 'Cannot pick up orders from a batch that is not assigned to you',
+            ], 400);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'order_ids' => 'required|array|min:1',
+            'order_ids.*' => [
+                'required',
+                'exists:orders,id',
+                // 2. تمرير المتغيرات المطلوبة عبر use
+                function ($attribute, $value, $fail) use ($user, $orderBatch) {
+                    $order = Order::find($value);
+
+                    // 3. تأكد من اسم العلاقة الصحيحة للمندوب (استبدل adminProfile بـ driverProfile أو العلاقة الصحيحة لديك)
+                    $userRegionId = $user->driverProfile->region_id ?? $user->region_id;
+
+                    if ($order->region_id != $userRegionId) {
+                        $fail("The order with ID {$value} does not belong to the specified region.");
+                    }
+
+                    // 4. مقارنة id الدفعة بشكل منطقي وسليم بدلاً من كود الدفعة
+                    if ($order->batch_id !== $orderBatch->id) {
+                        $fail("The order with ID {$value} is not in the same batch.");
+                    }
+
+                    if ($order->driver_id !== $user->id) {
+                        $fail("The order with ID {$value} is not assigned to you.");
+                    }
+
+                    if ($order->status !== 'picked_up') {
+                        $fail("The order with ID {$value} not picked_up.");
+                    }
+                },
+            ],
+        ]);
+
+        if ($ordersCount !== count($request->order_ids)) {
+            return response()->json([
+                'message' => 'You must pick up all orders from this batch',
+            ], 422);
+        }
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $orderBatch->update([
+                'status' => 'picked_up',
+            ]);
+
+            $orders = $orderBatch->orders;
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Batch picked up successfully',
+                'batch_code' => $batchCode,
+                'driver_id' => $user->id,
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to pick up orders from batch',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function batchCompleted(Request $request, $batchCode)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('driver') || ! $user->role === 'driver') {
+            return response()->json([
+                'message' => 'You are not authorized to complete this batch',
+            ], 403);
+        }
+        $orderBatch = OrderBatch::where('batch_code', $batchCode)->first();
+        if (! $orderBatch) {
+            return response()->json([
+                'message' => 'Order batch not found',
+            ], 404);
+        }
+        if (! $orderBatch->driver_id === $user->id) {
+            return response()->json([
+                'message' => 'You are not authorized to complete this batch',
+            ], 403);
+        }
+        if ($orderBatch->status !== 'picked_up') {
+            return response()->json([
+                'message' => 'Cannot complete a batch that is not picked up',
+            ], 400);
+        }
+        $orders = Order::where('batch_id', $orderBatch->id)->get();
+        $completedCount = 0;
+        foreach ($orders as $i) {
+            if ($i->status === 'pending' || $i->status === 'picked_up') {
+                $completedCount++;
+            }
+        }
+        if ($completedCount !== 0) {
+            return response()->json([
+                'message' => 'Cannot complete a batch that is not completed',
+            ], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            OrderBatch::where('batch_code', $batchCode)->update([
+                'status' => 'completed',
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Batch completed successfully',
+                'batch_code' => $batchCode,
+                'driver_id' => $user->id,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to complete batch',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+    }
 }

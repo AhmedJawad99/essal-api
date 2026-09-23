@@ -35,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders', [OrderController::class, 'showOrders']);
     Route::get('/orders/{trackingCode}', [OrderController::class, 'showByTrackingCode']);
+    Route::match(['put', 'patch'], '/orders/{trackingCode}', [OrderController::class, 'updateOrderStatus']);
 });
 
 // order batch routes
@@ -48,5 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin|driver')->group(function () {
         Route::get('/order-batches/{batchCode}', [OrderBatchController::class, 'showBatchCode']);
         Route::match(['post', 'put'], '/order-batches/{batchCode?}/assign', [OrderBatchController::class, 'assignDriverToBatch']);
+        Route::match(['post', 'put'], '/order-batches/{batchCode}/pick-up', [OrderBatchController::class, 'pickingUpOrders']);
+        Route::match(['post', 'put'], '/order-batches/{batchCode}/complete', [OrderBatchController::class, 'batchCompleted']);
     });
 });

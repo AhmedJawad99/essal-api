@@ -18,42 +18,44 @@ class OrderController extends Controller
         // --- IGNORE ---
     }
 
-
     public function showByTrackingCode($trackingCode, Request $request)
     {
 
-
         $user = $request->user();
-        //merchant
+        // merchant
         if ($user->hasRole('merchant') || $user->role === 'merchant') {
             $order = $user->merchantOrders()->where('tracking_code', $trackingCode)->with('region')->first();
-            return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+
+            return $order ? new ShowOrdersResource($order) : response()->json(['message' => 'Order not found'], 404);
         }
-        //driver
+        // driver
         elseif ($user->hasRole('driver') || $user->role === 'driver') {
             $order = $user->driverOrders()->where('tracking_code', $trackingCode)->with('region')->first();
-            return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+
+            return $order ? new ShowOrdersResource($order) : response()->json(['message' => 'Order not found'], 404);
         }
-        //admin
+        // admin
         elseif ($user->hasRole('admin') || $user->role === 'admin') {
-            //super admin
+            // super admin
             if ($user->adminProfile && $user->adminProfile->is_super_admin) {
                 $order = Order::where('tracking_code', $trackingCode)->with(['region', 'merchant', 'driver'])->first();
-                return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+
+                return $order ? new ShowOrdersResource($order) : response()->json(['message' => 'Order not found'], 404);
             }
-            //manager admin
+            // manager admin
             elseif ($user->adminProfile && $user->adminProfile->region_id) {
                 $order = Order::where('tracking_code', $trackingCode)
                     ->where('region_id', $user->adminProfile->region_id)
                     ->with(['region', 'merchant', 'driver'])
                     ->first();
-                return $order ? new ShowOrdersResource($order) : response()->json(["message" => "Order not found"], 404);
+
+                return $order ? new ShowOrdersResource($order) : response()->json(['message' => 'Order not found'], 404);
             } else {
-                return response()->json(["message" => ""], 403);
+                return response()->json(['message' => ''], 403);
             }
         } else {
             return response()->json([
-                "message" => "You are not authorized to view this order"
+                'message' => 'You are not authorized to view this order',
             ], 403);
         }
     }
@@ -64,14 +66,17 @@ class OrderController extends Controller
 
         if ($user->hasRole('merchant') || $user->role === 'merchant') {
             $orders = $user->merchantOrders()->with('region')->orderBy('created_at', 'desc')->paginate(20);
+
             return ShowOrdersResource::collection($orders);
         } elseif ($user->hasRole('driver') || $user->role === 'driver') {
             $orders = $user->driverOrders()->with('region')->orderBy('created_at', 'desc')->paginate(20);
+
             return ShowOrdersResource::collection($orders);
         } elseif ($user->hasRole('admin') || $user->role === 'admin') {
 
             if ($user->adminProfile && $user->adminProfile->is_super_admin) {
                 $orders = Order::with(['region', 'merchant', 'driver'])->orderBy('created_at', 'desc')->paginate(20);
+
                 return ShowOrdersResource::collection($orders);
             }
 
@@ -80,16 +85,15 @@ class OrderController extends Controller
                     ->with('region')
                     ->orderBy('created_at', 'desc')
                     ->paginate(20);
+
                 return ShowOrdersResource::collection($orders);
             }
 
-
-
-            return response()->json(["message" => "حساب الإدارة هذا غير مكتمل الإعدادات"], 403);
+            return response()->json(['message' => 'حساب الإدارة هذا غير مكتمل الإعدادات'], 403);
         }
 
         return response()->json([
-            "message" => "You are not authorized to view orders"
+            'message' => 'You are not authorized to view orders',
         ], 403);
     }
 
@@ -108,7 +112,7 @@ class OrderController extends Controller
             'pickup_gps_link' => 'nullable|string|max:255',
             'delivery_address' => 'nullable|string|max:255',
             'delivery_gps_link' => 'nullable|string|max:255',
-            'total_amount' => 'required|numeric|min:0'
+            'total_amount' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -118,7 +122,7 @@ class OrderController extends Controller
         $region = Region::findOrFail($request->region_id);
         $delevery_cost = $region->default_delivery_cost;
 
-        $trackingCode = 'ORD-' . strtoupper(Str::random(10));
+        $trackingCode = 'ORD-'.strtoupper(Str::random(10));
 
         try {
             DB::beginTransaction();
@@ -138,7 +142,7 @@ class OrderController extends Controller
                 'delivery_address' => $request->delivery_address,
                 'delivery_gps_link' => $request->delivery_gps_link,
                 'delivery_cost' => $delevery_cost,
-                'total_amount' => $request->total_amount + $delevery_cost
+                'total_amount' => $request->total_amount + $delevery_cost,
             ]);
 
             $logs = $order->orderStatusLogs()->create([
@@ -151,13 +155,66 @@ class OrderController extends Controller
             return response()->json([
                 'message' => 'تم إنشاء الطلب بنجاح',
                 'order' => $order,
-                'logs' => $logs
+                'logs' => $logs,
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'حدث خطأ أثناء إنشاء الطلب',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateOrderStatus(Request $request, $trackingCode)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('driver') || $user->role !== 'driver') {
+            return response()->json([
+                'message' => 'You are not authorized to update order status',
+            ], 403);
+        }
+        $validator = Validator::make($request->all(), [
+            'status' => 'required|in:picked_up,delivered,returned,canceled',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+            $order = Order::where('tracking_code', $trackingCode)->first();
+            if ($order->status === $request->status) {
+                return response()->json([
+                    'message' => 'IS THE SAME!',
+                ], 403);
+            }
+            if (! $order) {
+                return response()->json([
+                    'message' => 'Order not found',
+                ], 404);
+            }
+            $order->status = $request->status;
+            $order->save();
+
+            $order->orderStatusLogs()->create([
+                'changed_by_id' => $user->id,
+                'status' => $request->status,
+                'note' => 'The order status has been updated to '.$request->status.' by the driver',
+            ]);
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Order status updated successfully',
+                'order' => $order,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'حدث خطأ أثناء تحديث حالة الطلب',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
