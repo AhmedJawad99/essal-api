@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\UserResource;
-use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
@@ -29,12 +29,12 @@ class AuthController extends Controller
             // بيانات المندوب
             'vehicle_type' => 'required_if:role,driver|string|max:255',
             'plate_number' => 'required_if:role,driver|string|max:255',
+            'region_id' => 'required_if:role,driver|exists:regions,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-
 
         // 2. استخراج البيانات النظيفة والموثقة فقط (تجاهل أي شيء آخر يرسله Burp Suite)
         $validated = $validator->validated();
@@ -63,6 +63,7 @@ class AuthController extends Controller
                 ]);
             } elseif ($validated['role'] === 'driver') {
                 $user->driverProfile()->create([
+                    'region_id' => $validated['region_id'],
                     'vehicle_type' => $validated['vehicle_type'],
                     'plate_number' => $validated['plate_number'],
                     'wallet_balance' => 0, // رصيد افتراضي
@@ -107,7 +108,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json(['error' => 'Invalid credentials'], 401);
         }
 

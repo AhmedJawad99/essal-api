@@ -40,11 +40,13 @@ Route::middleware('auth:sanctum')->group(function () {
 // order batch routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
-        Route::post('/order-batches/{batchCode}', [OrderBatchController::class, 'store']);
+        Route::post('/order-batches/{batchCode?}', [OrderBatchController::class, 'store']);
         Route::put('/order-batches/{batchCode}/remove', [OrderBatchController::class, 'removeOrdersFromBatch']);
         Route::delete('/order-batches/{batchCode}', [OrderBatchController::class, 'removeBatch']);
+        Route::get('/order-batches', [OrderBatchController::class, 'index']);
     });
     Route::middleware('role:admin|driver')->group(function () {
         Route::get('/order-batches/{batchCode}', [OrderBatchController::class, 'showBatchCode']);
+        Route::match(['post', 'put'], '/order-batches/{batchCode?}/assign', [OrderBatchController::class, 'assignDriverToBatch']);
     });
 });

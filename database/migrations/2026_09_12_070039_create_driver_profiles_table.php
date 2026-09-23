@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('driver_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('region_id')->constrained('regions')->cascadeOnDelete();
             $table->string('vehicle_type')->nullable();
             $table->string('plate_number')->nullable();
             $table->decimal('wallet_balance', 10, 2)->default(0);

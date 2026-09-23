@@ -11,7 +11,28 @@ use Illuminate\Support\Str;
 
 class OrderBatchController extends Controller
 {
-    public function store(Request $request, $batchCode)
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('admin') && $user->role !== 'admin') {
+            return response()->json([
+                'message' => 'You are not authorized to view order batches',
+            ], 403);
+        }
+        $orderBatches = OrderBatch::where('region_id', $user->adminProfile->region_id)->get();
+
+        if ($orderBatches->isEmpty()) {
+            return response()->json([
+                'message' => 'No order batches found',
+            ], 404);
+        }
+
+        return response()->json([
+            'order_batches' => $orderBatches,
+        ]);
+    }
+
+    public function store(Request $request, $batchCode = null)
     {
         $user = $request->user();
         if (! $user->hasRole('admin') && $user->role !== 'admin') {
@@ -48,8 +69,9 @@ class OrderBatchController extends Controller
 
         try {
             DB::beginTransaction();
+            $orderBatch = null;
             // If batchCode is not provided, generate a new one
-            if ($batchCode == null || $batchCode == '') {
+            if (! $batchCode) {
                 $batchCode = 'BATCH-'.strtoupper(Str::random(8));
                 $orderBatch = OrderBatch::create([
                     'region_id' => $request->user()->adminProfile->region_id,
@@ -245,5 +267,93 @@ class OrderBatchController extends Controller
             ], 500);
         }
 
+    }
+
+    // driver
+    public function assignDriverToBatch(Request $request, $batchCode)
+    {
+        $user = $request->user();
+        $isAdmin = $user->hasRole('admin') || $user->role === 'admin';
+        $isDriver = $user->hasRole('driver') || $user->role === 'driver';
+
+        // 1. التحقق من الصلاحيات (أدمن أو مندوب فقط)
+        if (! $isAdmin && ! $isDriver) {
+            return response()->json([
+                'message' => 'You are not authorized to assign a batch to a driver',
+            ], 403);
+        }
+
+        // 2. إذا كان أدمن، يجب أن يُرسل ID المندوب
+        if ($isAdmin) {
+            $validator = Validator::make($request->all(), [
+                'driver_id' => 'required|exists:users,id',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
+        }
+
+        // 3. البحث عن السلة
+        $orderBatch = OrderBatch::where('batch_code', $batchCode)->first();
+        if (! $orderBatch) {
+            return response()->json(['message' => 'Order batch not found'], 404);
+        }
+
+        // 4. التحقق من حالة السلة
+        if ($orderBatch->status !== 'open') {
+            return response()->json(['message' => 'Cannot assign a batch that is not open'], 400);
+        }
+
+        // 5. إذا كان المستخدم أدمن، نتحقق أن السلة في منطقته
+        if ($isAdmin && $orderBatch->region_id != $user->adminProfile->region_id) {
+            return response()->json(['message' => 'Cannot assign a batch that belongs to a different region'], 400);
+        }
+
+        // 6. تحديد من هو المندوب الذي سيستلم السلة
+        // إذا كان المستخدم مندوباً، يستلمها هو. إذا كان أدمن، نعطيها للمندوب المُرسل في الطلب.
+        $driverId = $isDriver ? $user->id : $request->driver_id;
+
+        try {
+            DB::beginTransaction();
+
+            // 7. تحديث حالة السلة وربطها بالمندوب
+            $orderBatch->update([
+                'driver_id' => $driverId,
+                'status' => 'assigned', // أو 'picked_up' حسب سير العمل لديك
+            ]);
+
+            // 8. تحديث جميع الطلبات داخل هذه السلة
+            Order::where('batch_id', $orderBatch->id)->update([
+                'driver_id' => $driverId,
+                'status' => 'picked_up', // عادة الطلب يعتبر قيد التوصيل بمجرد تعيينه لمندوب
+            ]);
+
+            // 9. (اختياري) إضافة Logs للطلبات
+            $orders = $orderBatch->orders;
+            foreach ($orders as $order) {
+                $order->orderStatusLogs()->create([
+                    'changed_by_id' => $user->id,
+                    'status' => 'picked_up',
+                    'note' => $isDriver ? 'المندوب استلم السلة' : 'تم تعيين السلة للمندوب بواسطة الإدارة',
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Batch assigned to driver successfully',
+                'batch_code' => $batchCode,
+                'driver_id' => $driverId,
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to assign batch to driver',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 }

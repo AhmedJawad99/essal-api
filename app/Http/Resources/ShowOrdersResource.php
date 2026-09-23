@@ -21,6 +21,8 @@ class ShowOrdersResource extends JsonResource
             'customer_phone' => $this->customer_phone,
             'customer_phone_alt' => $this->customer_phone_alt,
             'order_description' => $this->order_description,
+            'status' => $this->status,
+            'batch_code' => $this->batch_code,
             'type' => $this->type,
             'payment_method' => $this->payment_method,
             'pickup_address' => $this->pickup_address,
