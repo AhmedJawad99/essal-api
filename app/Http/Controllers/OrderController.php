@@ -181,6 +181,11 @@ class OrderController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+        // if the status is 'delivered' then set is_customer_paid to true
+        $is_customer_paid = false;
+        if ($request->status === 'delivered') {
+            $is_customer_paid = true;
+        }
 
         try {
             DB::beginTransaction();
@@ -196,6 +201,7 @@ class OrderController extends Controller
                 ], 404);
             }
             $order->status = $request->status;
+            $order->is_customer_paid = $is_customer_paid;
             $order->save();
 
             $order->orderStatusLogs()->create([
